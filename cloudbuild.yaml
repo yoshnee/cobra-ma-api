@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/kerjasama-dev/cobra-ma/cobra-ma-api'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'europe-west1-docker.pkg.dev/kerjasama-dev/cobra-ma/cobra-ma-api'
+
+images:
+  - 'europe-west1-docker.pkg.dev/kerjasama-dev/cobra-ma/cobra-ma-api'
