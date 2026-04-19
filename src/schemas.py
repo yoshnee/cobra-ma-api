@@ -4,8 +4,6 @@ schemas.py — Pydantic models for LLM extraction and API request/response contr
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
@@ -84,7 +82,6 @@ class BenefitComparison(BaseModel):
     service: str           # e.g. "PCP Visit", "Deductible"
     cobra_value: str       # e.g. "$30 copay", "$2,000", "Unknown"
     alternative_value: str
-    verdict: Literal["better", "worse", "similar", "unknown"]
 
 
 class SuggestedPlan(BaseModel):
