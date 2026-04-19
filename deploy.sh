@@ -9,6 +9,10 @@ SA_EMAIL="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 INSTANCE="kerjasama-dev:europe-west2:kerjasama-db"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/cobra-ma/cobra-ma-api"
 
+echo "==> Running tests..."
+python -m pytest tests/ -v
+echo "==> All tests passed!"
+
 echo "==> Creating Artifact Registry repo (if needed)..."
 gcloud artifacts repositories create cobra-ma \
   --repository-format=docker \

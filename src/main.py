@@ -7,9 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import cleanup
-from extract import router as extract_router
-from plans import router as plans_router
+from src.clients.db import cleanup
+from src.routes.compare import router as compare_router
+from src.routes.extract_card import router as extract_card_router
+from src.routes.extract_cobra import router as extract_cobra_router
 
 
 @asynccontextmanager
@@ -30,8 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(extract_router)
-app.include_router(plans_router)
+app.include_router(extract_cobra_router)
+app.include_router(extract_card_router)
+app.include_router(compare_router)
 
 
 @app.get("/health")
