@@ -10,9 +10,9 @@ import base64
 import anthropic
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from llm import get_instructor_client, MODEL, ANTHROPIC_API_KEY
-from schemas import CobraElectionExtraction
-from turnstile import verify_turnstile
+from src.clients.llm import get_instructor_client, MODEL, ANTHROPIC_API_KEY
+from src.schemas import CobraElectionExtraction
+from src.clients.turnstile import verify_turnstile
 
 router = APIRouter()
 
@@ -62,9 +62,6 @@ async def extract_cobra_election(
 ):
     await verify_turnstile(turnstile_token)
 
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
-
     content_type = file.content_type or ""
     if content_type not in _IMAGE_TYPES and content_type != _PDF_TYPE:
         raise HTTPException(
@@ -75,6 +72,9 @@ async def extract_cobra_election(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
+
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
     b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
 

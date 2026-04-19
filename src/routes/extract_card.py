@@ -10,9 +10,9 @@ import base64
 import anthropic
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from llm import get_instructor_client, MODEL, ANTHROPIC_API_KEY
-from schemas import InsuranceCardExtraction
-from turnstile import verify_turnstile
+from src.clients.llm import get_instructor_client, MODEL, ANTHROPIC_API_KEY
+from src.schemas import InsuranceCardExtraction
+from src.clients.turnstile import verify_turnstile
 
 router = APIRouter()
 
@@ -64,9 +64,6 @@ async def extract_insurance_card(
 ):
     await verify_turnstile(turnstile_token)
 
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
-
     _validate_image(front, "Front image")
     if back is not None:
         _validate_image(back, "Back image")
@@ -74,6 +71,9 @@ async def extract_insurance_card(
     front_bytes = await front.read()
     if not front_bytes:
         raise HTTPException(status_code=400, detail="Front image is empty")
+
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
     # Build image content blocks — both in a single LLM call
     content: list[dict] = [

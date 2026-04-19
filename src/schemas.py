@@ -103,7 +103,24 @@ class SuggestedPlan(BaseModel):
     reasoning: str  # why this plan was selected
 
 
+class SuggestedDentalPlan(BaseModel):
+    plan_id: str
+    plan_name: str
+    carrier: str
+    carrier_phone: str | None = None
+    carrier_website: str | None = None
+    plan_type: str
+    dental_level: str  # "high" or "low"
+    monthly_premium: float
+    annual_max: float | None = None
+    deductible: float | None = None
+    monthly_savings: float
+    comparison: list[BenefitComparison]
+    reasoning: str
+
+
 class CompareResponse(BaseModel):
     cobra_summary: dict  # echo back understanding of current plan
-    suggestions: list[SuggestedPlan]
+    medical_suggestions: list[SuggestedPlan]  # exactly 3
+    dental_suggestions: list[SuggestedDentalPlan]  # 0-3
     overall_summary: str  # 3-5 sentence neutral summary

@@ -7,10 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from db import cleanup
-from compare import router as compare_router
-from extract_card import router as extract_card_router
-from extract_cobra import router as extract_cobra_router
+from src.clients.db import cleanup
+from src.routes.compare import router as compare_router
+from src.routes.extract_card import router as extract_card_router
+from src.routes.extract_cobra import router as extract_cobra_router
 
 
 @asynccontextmanager
