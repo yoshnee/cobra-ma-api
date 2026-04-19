@@ -384,71 +384,53 @@ present the tradeoffs — you do NOT recommend or tell the user what to do.
 Given the user's current COBRA plan details and a set of candidate MA Health \
 Connector plans from our database, select the 3 best alternative medical plans. \
 {"Also select up to 3 dental plan alternatives." if has_dental and dental_candidates else ""} \
-For each selected plan, produce a side-by-side benefit comparison against the \
-user's current coverage and explain why you selected it. Write a brief overall \
-summary (3-5 sentences) highlighting key tradeoffs across all suggestions.
+For each selected plan, produce a side-by-side benefit comparison table and \
+a structured editor's note. Write a brief overall_summary (2-3 sentences).
 
 Selection priorities (in order):
-1. SAVINGS FIRST: Prioritize plans with the greatest monthly premium savings \
-vs the user's current COBRA cost. The whole point of this tool is to show \
-users they can save money.
-2. PROTECT KEY BENEFITS: Among plans with good savings, favor those that \
-preserve the user's existing benefit levels — especially copays, deductible, \
-and OOP max. If a plan saves $200/month but doubles the deductible, flag that \
-tradeoff clearly. Do not suggest a plan that eliminates a benefit the user \
-explicitly values (see freeform notes below).
-3. RESPECT FREEFORM NOTES: The user's freeform notes describe benefits they \
-specifically care about — for example "$0 copay for therapy", "$15 for generic \
-prescriptions", or "2 cleanings per year covered." Treat these as hard \
-constraints: look for candidate plans whose benefits match or come close. \
-If no candidate matches a noted benefit, say so in the reasoning — do not \
-silently ignore it.
+1. SAME PLAN TYPE FIRST: If the user has a PPO, the first suggestion MUST be \
+the best PPO option available (even if only one exists). Note clearly that \
+the MA Health Connector has very limited PPO options.
+2. SAVINGS WITH BENEFIT PRESERVATION: For remaining suggestions, prioritize \
+plans that offer the best balance of premium savings AND closest match to \
+the user's current deductible and OOP max. A plan that saves $500/month but \
+triples the OOP max is a poor suggestion for a high-utilization user.
+3. VARIETY: The 3 suggestions should represent meaningfully different tradeoffs:
+   - One same-type or closest benefit match
+   - One best-savings option (even if benefits are worse)
+   - One best-benefits option (even if premium savings are smaller)
+4. RESPECT FREEFORM NOTES: The user's freeform notes describe benefits they \
+specifically care about. Treat these as hard constraints. If no candidate \
+matches a noted benefit, say so in the reasoning.
 
-Plan type guidance:
-- The user's current plan type is: {plan_type_str}.
-- Prioritize suggesting plans of the SAME type when available.
-- If you suggest a plan of a DIFFERENT type (e.g., HMO when user has PPO), \
-you MUST note this prominently in the reasoning and explain what it means \
-for the user (e.g., "This is an HMO — unlike your current PPO, you will need \
-a primary care referral for specialists and must use in-network providers only. \
-Your current doctors may not be in-network.").
-- If few or no same-type plans exist among the candidates, explain this in \
-the overall_summary (e.g., "The MA Health Connector currently offers only \
-2 PPO plans; most alternatives are HMO-based.").
+Comparison table rules:
+- Each suggestion MUST include rows for: Monthly Premium, Deductible, \
+Out-of-Pocket Maximum, and all key copays where data exists for both plans.
+- If a value is NULL or missing, use "Not listed in filing".
+- The table has only 3 columns: service, cobra_value, alternative_value. \
+No verdict column.
 
-Data completeness:
-- For every medical plan suggestion, you MUST include rows for Deductible and \
-Out-of-Pocket Maximum in the comparison table, even if the value is missing. \
-If the value is NULL or missing in the candidate data, use "Not listed in \
-plan filing" as the value and set verdict to "unknown".
-- Never omit Deductible or OOP Max rows from the comparison table.
-
-Cost scenario analysis:
-- Each candidate plan includes pre-computed annual cost scenarios:
-  - annual_cost_low: premium x 12 (healthy year, minimal care)
-  - annual_cost_mid: premium x 12 + deductible (moderate utilization)
-  - annual_cost_max: premium x 12 + OOP max (max utilization — pregnancy, surgery)
-- The user's COBRA annual costs (cobra_annual_cost_low, cobra_annual_cost_max) are \
-also included in each candidate for easy comparison.
-- In the reasoning field, ALWAYS mention the max-utilization scenario. \
-Example: "Saves $230/month ($2,760/year) in a healthy year, but in a \
-max-utilization year (pregnancy, major surgery), total cost is $13,000 vs \
-COBRA's $12,100 — COBRA wins by $900 in that scenario."
-- If the user mentioned pregnancy, ongoing treatment, or high utilization in \
-their freeform notes, lead with the max-utilization comparison — it is the \
-most relevant number for them.
+Editor's note format:
+- The reasoning field MUST use this exact bullet-point structure:
+  • Premium: Saves $X/month ($Y/year) vs your COBRA premium
+  • Deductible: $[COBRA ded] → $[plan ded]
+  • OOP Max: $[COBRA OOP] → $[plan OOP] — worst-case annual cost is \
+$[plan premium*12 + plan OOP] vs COBRA's $[COBRA premium*12 + COBRA OOP]
+  • Network: [Same type as current / ⚠️ This is an HMO. Unlike your PPO, \
+you cannot see out-of-network doctors, you will need referrals for specialists, \
+and your current providers may not be in this plan's network. Check the \
+carrier's provider directory before switching.]
+  • Key copay changes: PCP $X→$Y, Specialist $X→$Y, Therapy $X→$Y
+  • Freeform match: [address each user note specifically, or "No notes provided"]
+- Do NOT write free-form paragraphs. Stick to the bullet format above.
 
 Rules:
 - Be factual and neutral — do NOT recommend or tell the user what to choose.
-- Only compare fields where you have data for BOTH plans. Never guess or fabricate values.
-- For the verdict field, use: "better" if the alternative is better for the user, \
-"worse" if worse, "similar" if roughly equal, "unknown" if data is missing for either side.
+- Only compare fields where you have data for BOTH plans. Never guess or fabricate.
 - monthly_savings = user's COBRA premium minus the alternative's premium (can be negative).
-- In the reasoning field, always cite specific dollar amounts (e.g. "saves $180/month \
-but your PCP copay rises from $20 to $35"). Do not write vague statements like \
-"offers competitive pricing."
+- NEVER reference a specific year (2024, 2025, 2026, etc.) in any text field.
 - If the user's insurance card data was not provided, note in the overall_summary \
-that the comparison is based on premium only and may not reflect full benefit differences.
+that the comparison is based on premium only.
 
 [INPUT DATA]
 Current COBRA Plan:
@@ -466,7 +448,7 @@ Candidate MA Health Connector Medical Plans (pick the best 3):
 [OUTPUT]
 Return the structured CompareResponse with cobra_summary, exactly 3 \
 medical_suggestions, {"up to 3 dental_suggestions," if has_dental and dental_candidates else "an empty dental_suggestions list,"} \
-and an overall_summary."""
+and a brief overall_summary (2-3 sentences max)."""
 
     return prompt
 
@@ -517,7 +499,7 @@ async def compare_plans(req: CompareRequest):
     try:
         result = get_instructor_client().messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=16384,
             max_retries=2,
             response_model=CompareResponse,
             messages=[{"role": "user", "content": prompt}],

@@ -140,24 +140,15 @@ class TestCompareRequest:
 # ---------------------------------------------------------------------------
 
 class TestBenefitComparison:
-    def test_valid_verdicts(self):
-        for verdict in ["better", "worse", "similar", "unknown"]:
-            b = BenefitComparison(
-                service="PCP Visit",
-                cobra_value="$30",
-                alternative_value="$25",
-                verdict=verdict,
-            )
-            assert b.verdict == verdict
-
-    def test_rejects_invalid_verdict(self):
-        with pytest.raises(ValidationError):
-            BenefitComparison(
-                service="PCP Visit",
-                cobra_value="$30",
-                alternative_value="$25",
-                verdict="great",
-            )
+    def test_valid_comparison(self):
+        b = BenefitComparison(
+            service="PCP Visit",
+            cobra_value="$30",
+            alternative_value="$25",
+        )
+        assert b.service == "PCP Visit"
+        assert b.cobra_value == "$30"
+        assert b.alternative_value == "$25"
 
 
 # ---------------------------------------------------------------------------

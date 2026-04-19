@@ -177,15 +177,15 @@ class TestBuildComparePrompt:
         assert "[INPUT DATA]" in prompt
         assert "[OUTPUT]" in prompt
 
-    def test_instructs_savings_priority(self, sample_medical_candidates):
+    def test_instructs_same_type_first(self, sample_medical_candidates):
         req = self._make_request()
         prompt = _build_compare_prompt(req, sample_medical_candidates, [], "PPO")
-        assert "SAVINGS FIRST" in prompt
+        assert "SAME PLAN TYPE FIRST" in prompt
 
-    def test_instructs_protect_benefits(self, sample_medical_candidates):
+    def test_instructs_savings_with_preservation(self, sample_medical_candidates):
         req = self._make_request()
         prompt = _build_compare_prompt(req, sample_medical_candidates, [], "PPO")
-        assert "PROTECT KEY BENEFITS" in prompt
+        assert "SAVINGS WITH BENEFIT PRESERVATION" in prompt
 
     def test_instructs_respect_freeform(self, sample_medical_candidates):
         req = self._make_request()
