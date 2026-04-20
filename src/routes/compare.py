@@ -382,7 +382,7 @@ present the tradeoffs — you do NOT recommend or tell the user what to do.
 
 [INSTRUCTIONS]
 Given the user's current COBRA plan details and a set of candidate MA Health \
-Connector plans from our database, select the 3 best alternative medical plans. \
+Connector plans from our database, select the 5 best alternative medical plans. \
 {"Also select up to 3 dental plan alternatives." if has_dental and dental_candidates else ""} \
 For each selected plan, produce a side-by-side benefit comparison table and \
 a structured editor's note. Write a brief overall_summary (2-3 sentences).
@@ -446,7 +446,7 @@ Candidate MA Health Connector Medical Plans (pick the best 3):
 {dental_section}
 
 [OUTPUT]
-Return the structured CompareResponse with cobra_summary, exactly 3 \
+Return the structured CompareResponse with cobra_summary, exactly 5 \
 medical_suggestions, {"up to 3 dental_suggestions," if has_dental and dental_candidates else "an empty dental_suggestions list,"} \
 and a brief overall_summary (2-3 sentences max)."""
 
