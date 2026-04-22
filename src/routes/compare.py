@@ -352,10 +352,12 @@ def _build_compare_prompt(
     user_plan_type: str | None,
 ) -> str:
     card_section = "Not provided (user skipped insurance card upload)"
+    card_data_missing = True
     if req.card_data:
         card_dict = req.card_data.model_dump(exclude_none=True)
         if card_dict:
             card_section = json.dumps(card_dict, indent=2)
+            card_data_missing = False
 
     medical_notes = req.medical_notes or "None"
     dental_notes = req.dental_notes or "None"
@@ -409,6 +411,14 @@ Out-of-Pocket Maximum, and all key copays where data exists for both plans.
 - If a value is NULL or missing, use "Not listed in filing".
 - The table has only 3 columns: service, cobra_value, alternative_value. \
 No verdict column.
+- For copay values: if the benefit's after_deductible field is true, \
+ALWAYS append "after deductible" (e.g. "$40 copay after deductible"). \
+If after_deductible is false or absent, do NOT add "after deductible".
+{"- IMPORTANT: Since the user did not provide any insurance card benefits, " \
+"use 'Not provided' (NEVER '$0') for ALL COBRA benefit values in cobra_value " \
+"fields (except Monthly Premium which is known). Treat these values as unknown, " \
+"not zero. In the editor's note bullets, write 'Not provided' wherever a COBRA " \
+"benefit value would appear (deductible, OOP max, copays)." if card_data_missing else ""}
 
 Editor's note format:
 - The reasoning field MUST use this exact bullet-point structure:

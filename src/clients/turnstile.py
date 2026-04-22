@@ -2,10 +2,13 @@
 turnstile.py — Cloudflare Turnstile verification helper.
 """
 
+import logging
 import os
 
 import httpx
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -23,4 +26,9 @@ async def verify_turnstile(token: str) -> None:
 
     result = resp.json()
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail="Captcha verification failed")
+        error_codes = result.get("error-codes", [])
+        logger.warning("Turnstile verification failed: %s", error_codes)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Captcha verification failed: {', '.join(error_codes) or 'unknown'}",
+        )
