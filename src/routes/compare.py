@@ -6,10 +6,13 @@ candidate plans, and uses Claude to rank and compare the top 3 medical
 suggestions + up to 3 dental suggestions.
 """
 
+import asyncio
 import json
+import logging
 
 import anthropic
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 
 from src.clients.db import get_engine
@@ -17,6 +20,8 @@ from src.clients.llm import get_instructor_client, MODEL, ANTHROPIC_API_KEY
 from src.schemas import CompareRequest, CompareResponse
 from src.clients.turnstile import verify_turnstile
 from src.zip_to_rating_area import get_rating_area
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -467,6 +472,17 @@ and a brief overall_summary (2-3 sentences max)."""
 # Endpoint
 # ---------------------------------------------------------------------------
 
+def _run_comparison(prompt: str) -> CompareResponse:
+    """Synchronous LLM call — runs in a thread via run_in_executor."""
+    return get_instructor_client().messages.create(
+        model=MODEL,
+        max_tokens=16384,
+        max_retries=2,
+        response_model=CompareResponse,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+
 @router.post("/compare")
 async def compare_plans(req: CompareRequest):
     await verify_turnstile(req.turnstile_token)
@@ -500,24 +516,36 @@ async def compare_plans(req: CompareRequest):
             detail="No Health Connector plans found for your age and location",
         )
 
-    # Enrich candidates with annual cost scenarios
     cobra_oop = req.card_data.oop_max_individual if req.card_data else None
     _add_cost_scenarios(medical_candidates, req.medical_monthly_premium, cobra_oop)
 
     prompt = _build_compare_prompt(req, medical_candidates, dental_candidates, user_plan_type)
 
-    try:
-        result = get_instructor_client().messages.create(
-            model=MODEL,
-            max_tokens=16384,
-            max_retries=2,
-            response_model=CompareResponse,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except anthropic.APIError as e:
-        raise HTTPException(status_code=502, detail=f"Anthropic API error: {e}")
+    # Stream keepalive whitespace every 5s so mobile Safari doesn't drop
+    # the connection during the 60-100s LLM call. The final chunk is the
+    # JSON body. Leading whitespace is ignored by JSON.parse / res.json().
+    async def generate():
+        loop = asyncio.get_event_loop()
+        task = loop.run_in_executor(None, _run_comparison, prompt)
 
-    # Inject the cobra_summary we built (don't rely on LLM to echo it correctly)
-    result.cobra_summary = _build_cobra_summary(req)
+        while not task.done():
+            yield b" "
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+            except asyncio.TimeoutError:
+                continue
+            except Exception:
+                break
 
-    return result.model_dump()
+        try:
+            result = task.result()
+        except anthropic.APIError as e:
+            error_body = json.dumps({"detail": f"Anthropic API error: {e}"})
+            logger.error("Anthropic API error during compare: %s", e)
+            yield b"\n" + error_body.encode()
+            return
+
+        result.cobra_summary = _build_cobra_summary(req)
+        yield b"\n" + json.dumps(result.model_dump()).encode()
+
+    return StreamingResponse(generate(), media_type="application/json")
