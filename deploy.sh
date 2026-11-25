@@ -6,7 +6,6 @@ REGION="europe-west1"
 SERVICE="cobra-ma-api"
 SA_NAME="cobra-ma-api"
 SA_EMAIL="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
-INSTANCE="kerjasama-dev:europe-west2:kerjasama-db"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/cobra-ma/cobra-ma-api"
 
 echo "==> Running tests..."
@@ -24,23 +23,11 @@ gcloud iam service-accounts create "${SA_NAME}" \
   --display-name="COBRA MA API" \
   --project="${PROJECT}" 2>/dev/null || true
 
-echo "==> Granting Cloud SQL Client role..."
-gcloud projects add-iam-policy-binding "${PROJECT}" \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/cloudsql.client" \
-  --condition=None --quiet
-
 echo "==> Granting Cloud Run Invoker role..."
 gcloud projects add-iam-policy-binding "${PROJECT}" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/run.invoker" \
   --condition=None --quiet
-
-echo "==> Creating Cloud SQL IAM user (if needed)..."
-gcloud sql users create "${SA_NAME}@${PROJECT}.iam" \
-  --instance=kerjasama-db \
-  --type=CLOUD_IAM_SERVICE_ACCOUNT \
-  --project="${PROJECT}" 2>/dev/null || true
 
 echo "==> Creating anthropic-api-key secret (if needed)..."
 if ! gcloud secrets describe anthropic-api-key --project="${PROJECT}" &>/dev/null; then
@@ -66,6 +53,12 @@ gcloud secrets add-iam-policy-binding cloudflare-turnstile-kerjasama-secret-key 
   --role="roles/secretmanager.secretAccessor" \
   --project="${PROJECT}" --quiet
 
+echo "==> Granting Secret Manager accessor on cobra-ma-database-url..."
+gcloud secrets add-iam-policy-binding cobra-ma-database-url \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/secretmanager.secretAccessor" \
+  --project="${PROJECT}" --quiet
+
 echo "==> Building with Cloud Build..."
 gcloud builds submit \
   --config=cloudbuild.yaml \
@@ -76,9 +69,9 @@ echo "==> Deploying to Cloud Run..."
 gcloud run deploy "${SERVICE}" \
   --image="${IMAGE}" \
   --service-account="${SA_EMAIL}" \
-  --add-cloudsql-instances="${INSTANCE}" \
-  --set-env-vars="INSTANCE_CONNECTION_NAME=${INSTANCE},DB_NAME=cobra-ma,DB_USER=${SA_NAME}@${PROJECT}.iam" \
-  --set-secrets="ANTHROPIC_API_KEY=anthropic-api-key:latest,TURNSTILE_SECRET_KEY=cloudflare-turnstile-kerjasama-secret-key:latest" \
+  --clear-cloudsql-instances \
+  --remove-env-vars="INSTANCE_CONNECTION_NAME,DB_NAME,DB_USER" \
+  --set-secrets="ANTHROPIC_API_KEY=anthropic-api-key:latest,TURNSTILE_SECRET_KEY=cloudflare-turnstile-kerjasama-secret-key:latest,DATABASE_URL=cobra-ma-database-url:latest" \
   --region="${REGION}" \
   --memory=512Mi \
   --min-instances=0 \
