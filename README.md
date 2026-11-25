@@ -35,7 +35,7 @@ flowchart LR
     B --> E[POST /compare]
     D --> E
     F[Age, ZIP,<br/>freeform notes] --> E
-    E --> G[(Cloud SQL:<br/>MA plans, rates,<br/>benefits)]
+    E --> G[(Neon Postgres:<br/>MA plans, rates,<br/>benefits)]
     E --> H[Ranked, neutral<br/>side-by-side<br/>comparison]
 ```
 
@@ -52,7 +52,7 @@ A few decisions worth calling out:
 - **Structured LLM output, not prompt-and-pray.** Every model call is typed end-to-end with [`instructor`](https://github.com/instructor-ai/instructor) + Pydantic, so extraction and comparison responses are validated objects — with automatic retries on schema mismatch — rather than free-form text that needs parsing.
 - **Neutral by design.** The comparison prompt is explicitly instructed to present tradeoffs and *never* recommend a plan. Health decisions stay with the user; the tool just makes the numbers legible.
 - **Streaming keepalive for long calls.** The `/compare` call can take 60–100s. The endpoint streams keepalive whitespace every 5s so mobile Safari doesn't drop the connection mid-request, then flushes the JSON body as the final chunk.
-- **Passwordless database access.** Cloud SQL is reached through the Cloud SQL Python Connector with **IAM authentication** — no DB passwords are stored or shipped anywhere.
+- **Least-privilege database access.** The API connects to serverless Postgres (Neon) as a **read-only role**, with the connection string injected from Secret Manager — nothing is stored in the image or the repo. The database scales to zero when idle.
 - **Bot protection at the edge of every mutating call.** Each endpoint verifies a **Cloudflare Turnstile** token before doing any work, and gracefully no-ops verification in local dev.
 - **Testable by construction.** Database, LLM, and connector clients are all lazily initialized, so the app imports (and the 64-test suite runs) with no cloud credentials present.
 
@@ -123,7 +123,7 @@ All extraction endpoints take `multipart/form-data` (the file plus a `turnstile_
 | Language         | Python 3.12 |
 | AI               | Anthropic Claude Haiku 4.5 (vision + reasoning) via `instructor` |
 | Data validation  | Pydantic v2 |
-| Database         | PostgreSQL on Google Cloud SQL (IAM auth) |
+| Database         | PostgreSQL on Neon (serverless, scales to zero) |
 | Bot protection   | Cloudflare Turnstile |
 | Hosting          | Google Cloud Run (containerized, scale-to-zero) |
 | CI image build   | Google Cloud Build + Artifact Registry |
@@ -139,7 +139,7 @@ src/
 ├── zip_to_rating_area.py   # MA ZIP → 1 of 7 rating areas
 ├── clients/
 │   ├── llm.py              # Shared Anthropic + instructor client (lazy)
-│   ├── db.py               # Cloud SQL connector + SQLAlchemy engine (lazy, IAM auth)
+│   ├── db.py               # SQLAlchemy engine for Neon Postgres (lazy)
 │   └── turnstile.py        # Cloudflare Turnstile verification
 └── routes/
     ├── extract_cobra.py    # POST /extract-cobra
@@ -174,8 +174,7 @@ Then open **http://localhost:8080/docs** for the interactive API explorer.
 |----------------------------|-------|
 | `ANTHROPIC_API_KEY`        | Required for the extraction and comparison endpoints. |
 | `TURNSTILE_SECRET_KEY`     | Leave empty to skip captcha verification in local dev. |
-| `INSTANCE_CONNECTION_NAME` | Cloud SQL instance; only needed for `/compare` against a live database. |
-| `DB_NAME`, `DB_USER`       | Cloud SQL database and IAM user. |
+| `DATABASE_URL`             | Postgres connection string; only needed for `/compare` against a live database. |
 
 > The extraction endpoints (`/extract-cobra`, `/extract-card`) work with just an `ANTHROPIC_API_KEY` — no database required.
 
@@ -193,13 +192,13 @@ The suite (64 tests) covers document-extraction wiring, request/response schemas
 
 ## Deployment
 
-The service is containerized and deployed to Google Cloud Run. `deploy.sh` is idempotent and provisions everything it needs — Artifact Registry repo, service account, Cloud SQL IAM user, Secret Manager entries, and IAM bindings — before building via Cloud Build and rolling out:
+The service is containerized and deployed to Google Cloud Run. `deploy.sh` is idempotent and provisions everything it needs — Artifact Registry repo, service account, Secret Manager entries, and IAM bindings — before building via Cloud Build and rolling out:
 
 ```bash
 ./deploy.sh
 ```
 
-Runtime secrets (`ANTHROPIC_API_KEY`, `TURNSTILE_SECRET_KEY`) are injected from Google Secret Manager; the database is reached over the Cloud SQL connection without a password.
+Runtime secrets (`ANTHROPIC_API_KEY`, `TURNSTILE_SECRET_KEY`, `DATABASE_URL`) are injected from Google Secret Manager.
 
 ---
 

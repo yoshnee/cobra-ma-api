@@ -1,49 +1,41 @@
 """
-db.py — Cloud SQL connection via Python Connector + IAM auth.
+db.py — Postgres (Neon) connection via SQLAlchemy + pg8000.
 
-Connector and engine are created lazily so the module can be imported
-without GCP credentials (e.g. in tests).
+The engine is created lazily so the module can be imported without a
+database configured (e.g. in tests).
 """
 
 import os
+import ssl
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 
-INSTANCE_CONNECTION_NAME = os.environ.get(
-    "INSTANCE_CONNECTION_NAME", "kerjasama-dev:europe-west2:kerjasama-db"
-)
-DB_NAME = os.environ.get("DB_NAME", "cobra-ma")
-DB_USER = os.environ.get("DB_USER", "cobra-ma-api@kerjasama-dev.iam")
-
-_connector = None
 _engine = None
-
-
-def _get_connector():
-    global _connector
-    if _connector is None:
-        from google.cloud.sql.connector import Connector
-        _connector = Connector()
-    return _connector
-
-
-def _get_conn():
-    return _get_connector().connect(
-        INSTANCE_CONNECTION_NAME,
-        "pg8000",
-        user=DB_USER,
-        db=DB_NAME,
-        enable_iam_auth=True,
-    )
 
 
 def get_engine():
     global _engine
     if _engine is None:
-        _engine = create_engine("postgresql+pg8000://", creator=_get_conn, pool_size=3)
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            raise RuntimeError("DATABASE_URL is not configured")
+
+        # pg8000 does not understand libpq query params (sslmode, channel_binding),
+        # so drop them and always connect over verified TLS instead.
+        url = make_url(database_url).set(drivername="postgresql+pg8000", query={})
+        _engine = create_engine(
+            url,
+            connect_args={"ssl_context": ssl.create_default_context()},
+            pool_size=3,
+            # Neon suspends when idle and drops pooled connections; check each
+            # connection before use so the first request after a pause succeeds.
+            pool_pre_ping=True,
+            pool_recycle=240,
+        )
     return _engine
 
 
 def cleanup():
-    if _connector is not None:
-        _connector.close()
+    if _engine is not None:
+        _engine.dispose()
